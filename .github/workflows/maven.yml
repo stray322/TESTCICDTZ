@@ -5,6 +5,12 @@ on:
     branches: [ "master" ]
   pull_request:
     branches: [ "master" ]
+workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
 
 jobs:
   test:
@@ -31,43 +37,46 @@ jobs:
       - name: Run tests with Maven
         run: mvn clean test -Dheadless=true
 
-      - name: List target directory contents
-        run: ls -la target/
-
-      - name: Check allure-results
-        run: |
-          echo "Checking allure-results..."
-          if [ -d "target/allure-results" ]; then
-            echo "✅ allure-results directory exists!"
-            ls -la target/allure-results/
-            echo "Files count: $(ls -1 target/allure-results/ | wc -l)"
-          else
-            echo "❌ allure-results not found!"
-            ls -la target/
-          fi
-
       - name: Generate Allure Report
         run: mvn allure:report
 
-      - name: Upload Allure Results
-        uses: actions/upload-artifact@v4
-        with:
-          name: allure-results
-          path: target/allure-results/
-          retention-days: 30
+      - name: Setup Allure History
+        run: |
+          mkdir -p allure-history
+          cp -r target/allure-report/history/* allure-history/ || true
 
-      - name: Upload Allure Report
+      - name: Upload Allure Report as Artifact
         uses: actions/upload-artifact@v4
         with:
           name: allure-report
           path: target/allure-report/
-          retention-days: 30
+          retention-days: 7
 
-      - name: Upload Test Results
-        uses: actions/upload-artifact@v4
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    needs: test
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Download Allure Report
+        uses: actions/download-artifact@v4
         with:
-          name: test-results
-          path: |
-            target/surefire-reports/
-            target/allure-results/
-          retention-days: 30
+          name: allure-report
+          path: target/allure-report
+
+      - name: Setup Pages
+        uses: actions/configure-pages@v4
+
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: target/allure-report/
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
