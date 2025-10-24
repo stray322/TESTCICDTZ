@@ -1,0 +1,73 @@
+name: Java CI with Maven and Allure
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+          cache: maven
+
+      - name: Cache Maven packages
+        uses: actions/cache@v3
+        with:
+          path: ~/.m2
+          key: ${{ runner.os }}-m2-${{ hashFiles('**/pom.xml') }}
+          restore-keys: ${{ runner.os }}-m2
+
+      - name: Run tests with Maven
+        run: mvn clean test -Dheadless=true
+
+      - name: List target directory contents
+        run: ls -la target/
+
+      - name: Check allure-results
+        run: |
+          echo "Checking allure-results..."
+          if [ -d "target/allure-results" ]; then
+            echo "✅ allure-results directory exists!"
+            ls -la target/allure-results/
+            echo "Files count: $(ls -1 target/allure-results/ | wc -l)"
+          else
+            echo "❌ allure-results not found!"
+            ls -la target/
+          fi
+
+      - name: Generate Allure Report
+        run: mvn allure:report
+
+      - name: Upload Allure Results
+        uses: actions/upload-artifact@v3
+        with:
+          name: allure-results
+          path: target/allure-results/
+          retention-days: 30
+
+      - name: Upload Allure Report
+        uses: actions/upload-artifact@v3
+        with:
+          name: allure-report
+          path: target/allure-report/
+          retention-days: 30
+
+      - name: Upload Test Results
+        uses: actions/upload-artifact@v3
+        with:
+          name: test-results
+          path: |
+            target/surefire-reports/
+            target/allure-results/
+          retention-days: 30
